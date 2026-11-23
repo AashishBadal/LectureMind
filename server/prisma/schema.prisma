@@ -1,0 +1,268 @@
+// Prisma schema for LectureMind
+// Configured for PostgreSQL on Neon (Serverless Postgres)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                   String    @id @default(cuid())
+  name                 String?
+  email                String    @unique
+  passwordHash         String?   // nullable for Google-only accounts
+  googleId             String?   @unique
+  emailVerified        Boolean   @default(false)
+  resetPasswordToken   String?   @unique
+  resetPasswordExpires DateTime?
+  credits              Int       @default(10)
+
+  // Profile & Onboarding fields
+  role                 String?   @default("STUDENT") // STUDENT | TEACHER | RESEARCHER | OTHER
+  institution          String?   // e.g., "Harvard University", "Tribhuvan University"
+  fieldOfStudy         String?   // e.g., "Computer Science", "Medicine", "Business"
+  academicLevel        String?   // "High School" | "Undergraduate" | "Graduate / PhD" | "Professional"
+  primaryGoal          String?   // "EXAM_PREP" | "SUMMARIZATION" | "RESEARCH" | "TEACHING" | "OTHER"
+  aiTonePreference     String?   @default("BALANCED") // "CONCISE" | "BALANCED" | "IN_DEPTH" | "SOCRATIC"
+  onboardingCompleted  Boolean   @default(false)
+
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  lectures             Lecture[]
+  taughtSubjects       Subject[]       @relation("TeacherSubjects")
+  enrolledSubjects     SubjectMember[] @relation("UserEnrolledSubjects")
+  payments             Payment[]
+  creditTransactions   CreditTransaction[]
+
+  @@index([resetPasswordToken])
+  @@map("users")
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  name        String
+  code        String?  // e.g. "CS301"
+  description String?  @db.Text
+  color       String?  @default("indigo") // e.g. "indigo", "emerald", "sky", "amber", "purple", "rose"
+  teacherId   String
+  inviteCode  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher     User            @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: Cascade)
+  members     SubjectMember[]
+  lectures    Lecture[]
+
+  @@index([teacherId])
+  @@index([inviteCode])
+  @@map("subjects")
+}
+
+model SubjectMember {
+  id        String   @id @default(cuid())
+  subjectId String
+  userId    String
+  role      String   @default("STUDENT") // "TEACHER" | "STUDENT"
+  joinedAt  DateTime @default(now())
+
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user      User     @relation("UserEnrolledSubjects", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, userId])
+  @@index([subjectId])
+  @@index([userId])
+  @@map("subject_members")
+}
+
+model Lecture {
+  id               String         @id @default(cuid())
+  userId           String
+  subjectId        String?
+  title            String
+  originalFileName String?
+  audioUrl         String?
+  storagePath      String?
+  status           String         @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  duration         Int?           // Duration in seconds
+  lectureDate      DateTime       @default(now())
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject          Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  transcript       Transcript?
+  summary          Summary?
+  concepts         Concept[]
+  relationships    Relationship[]
+  learningMap      LearningMap?
+  bookmarks        Bookmark[]
+  chunks           TranscriptChunk[]
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([lectureDate])
+  @@index([createdAt])
+  @@index([status])
+  @@map("lectures")
+}
+
+model Transcript {
+  id        String   @id @default(cuid())
+  lectureId String   @unique
+  content   String   @db.Text
+  segments  Json?    // Timestamped segments [{ start, end, text }]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lecture   Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@map("transcripts")
+}
+
+model Summary {
+  id        String   @id @default(cuid())
+  lectureId String   @unique
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lecture   Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@map("summaries")
+}
+
+model Concept {
+  id          String         @id @default(cuid())
+  lectureId   String
+  name        String
+  description String?        @db.Text
+  importance  Int            @default(1)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  lecture     Lecture        @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  outgoingRelations Relationship[] @relation("SourceConcept")
+  incomingRelations Relationship[] @relation("TargetConcept")
+
+  @@index([lectureId])
+  @@map("concepts")
+}
+
+model Relationship {
+  id               String   @id @default(cuid())
+  lectureId        String
+  sourceConceptId  String
+  targetConceptId  String
+  relationshipType String   // e.g. "leads_to", "is_part_of", "explains", "relates_to"
+  description      String?
+  createdAt        DateTime @default(now())
+
+  lecture          Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  sourceConcept    Concept  @relation("SourceConcept", fields: [sourceConceptId], references: [id], onDelete: Cascade)
+  targetConcept    Concept  @relation("TargetConcept", fields: [targetConceptId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@index([sourceConceptId])
+  @@index([targetConceptId])
+  @@map("relationships")
+}
+
+model LearningMap {
+  id        String   @id @default(cuid())
+  lectureId String   @unique
+  mapData   Json     // Structured nodes and edges for graph representation
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lecture   Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@map("learning_maps")
+}
+
+model Bookmark {
+  id                 String   @id @default(cuid())
+  lectureId          String
+  title              String
+  note               String?  @db.Text
+  timestamp          Float?   // Audio timestamp in seconds
+  transcriptPosition Int?     // Character offset or segment index in transcript
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  lecture            Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@map("bookmarks")
+}
+
+model Payment {
+  id              String              @id @default(cuid())
+  userId          String
+  amount          Float               // NPR amount
+  credits         Int                 // Credits awarded
+  transactionUuid String              @unique // Unique transaction reference for eSewa
+  esewaRefId      String?             // eSewa transaction_code returned after success
+  status          String              @default("PENDING") // PENDING, COMPLETED, FAILED
+  gateway         String              @default("ESEWA")
+  rawResponse     Json?               // Store raw webhook / callback payload
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    CreditTransaction[]
+
+  @@index([userId])
+  @@index([transactionUuid])
+  @@map("payments")
+}
+
+model TranscriptChunk {
+  id          String   @id @default(cuid())
+  lectureId   String
+  chunkIndex  Int      // Sequential index of this chunk
+  content     String   @db.Text  // The raw text of this chunk
+  startSec    Float?   // Start timestamp in seconds (if available from segments)
+  endSec      Float?   // End timestamp in seconds
+  speaker     String?  // Speaker label if available
+  segmentIndex   Int?                         // Index into the source transcript's segment array
+  sourceHash     String                       // Fingerprint of transcript content and segments used to build this index
+  embeddingModel String                       // Re-index when the model changes
+  embedding      Unsupported("vector(1536)")? // pgvector HNSW-indexable Gemini embedding prefix
+  createdAt   DateTime @default(now())
+
+  lecture     Lecture  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@index([lectureId])
+  @@unique([lectureId, chunkIndex])
+  @@map("transcript_chunks")
+}
+
+model CreditTransaction {
+  id           String    @id @default(cuid())
+  userId       String
+  amount       Int       // e.g. +10, +35, -5
+  balanceAfter Int       // User balance after this transaction
+  type         String    // INITIAL_BONUS, ESEWA_PURCHASE, LECTURE_ANALYSIS, REFUND
+  description  String?   // Human-readable summary
+  lectureId    String?   // Associated lecture if type is LECTURE_ANALYSIS
+  paymentId    String?   // Associated payment if type is ESEWA_PURCHASE
+  createdAt    DateTime  @default(now())
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payment      Payment?  @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([paymentId])
+  @@index([type])
+  @@map("credit_transactions")
+}
+

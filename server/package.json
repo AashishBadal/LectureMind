@@ -1,0 +1,55 @@
+{
+  "name": "lecturemind-server",
+  "version": "1.0.0",
+  "description": "Backend API for LectureMind - AI-Based Smart Learning Map Generator",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push",
+    "prisma:studio": "prisma studio",
+    "prisma:status": "prisma migrate status",
+    "test:db": "node scripts/test-db.js",
+    "test:auth": "node scripts/test-auth.js",
+    "test:gemini": "node scripts/test-gemini.js",
+    "test:transcription": "node scripts/test-transcription.js",
+    "test:analysis": "node scripts/test-analysis.js",
+    "test:relationships": "node scripts/test-relationships.js",
+    "test:map": "node scripts/test-learning-map.js",
+    "test:part9": "node scripts/test-part9-history-search-edit.js",
+    "test:part10": "node scripts/test-part10-export-customization.js",
+    "test:part11": "node scripts/test-part11-security-performance.js",
+    "test:forgot-password": "node scripts/test-forgot-password.js",
+    "test:audio-lecture": "node scripts/test-cloud-computing-audio.js"
+  },
+  "keywords": [
+    "lecturemind",
+    "express",
+    "prisma",
+    "neon",
+    "gemini"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "google-auth-library": "^11.3.3",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.3.0",
+    "music-metadata": "^12.5.0",
+    "nodemailer": "^10.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9",
+    "prisma": "^5.22.0"
+  }
+}
